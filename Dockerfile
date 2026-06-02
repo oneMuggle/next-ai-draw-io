@@ -10,7 +10,9 @@ COPY package.json package-lock.json* ./
 
 # Install dependencies
 ARG ELECTRON_SKIP_BINARY_DOWNLOAD=1
-RUN npm install
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm config set registry ${NPM_REGISTRY} && \
+    npm install --legacy-peer-deps
 
 # Stage 2: Build application
 FROM node:24-alpine AS builder

@@ -1,3 +1,4 @@
+import "@/app/polyfills"
 import { GoogleAnalytics } from "@next/third-parties/google"
 import type { Metadata, Viewport } from "next"
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
@@ -38,11 +39,12 @@ export async function generateStaticParams() {
 export async function generateMetadata({
     params,
 }: {
-    params: Promise<{ lang: string }>
+    params: { lang: string }
 }): Promise<Metadata> {
-    const { lang: rawLang } = await params
     const lang = (
-        rawLang in { en: 1, zh: 1, ja: 1, "zh-Hant": 1 } ? rawLang : "en"
+        params.lang in { en: 1, zh: 1, ja: 1, "zh-Hant": 1 }
+            ? params.lang
+            : "en"
     ) as Locale
 
     // Default to English metadata
@@ -138,11 +140,10 @@ export default async function RootLayout({
     params,
 }: Readonly<{
     children: React.ReactNode
-    params: Promise<{ lang: string }>
+    params: { lang: string }
 }>) {
-    const { lang } = await params
-    if (!hasLocale(lang)) notFound()
-    const validLang = lang as Locale
+    if (!hasLocale(params.lang)) notFound()
+    const validLang = params.lang as Locale
     const dictionary = await getDictionary(validLang)
 
     const jsonLd = {
