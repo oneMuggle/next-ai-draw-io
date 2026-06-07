@@ -75,3 +75,6 @@ ai-models.json
 
 # local backups
 *.bak
+
+# Win7 兼容版本的内网分发包（不进入 git 跟踪）
+/win7-internal/
