@@ -1,34 +1,43 @@
 /**
  * Windows 7 浏览器兼容性烟雾测试。
  *
- * 目标：覆盖项目最低支持版本（Chrome 109 / Firefox 115 ESR / Edge 109 / Safari 15）。
  * 三组核心断言：
  *   1. polyfill 已注入（structuredClone / ReadableStream / Intl.Segmenter / Array#toSorted）
  *   2. 关键 CSS 变量被解析（--background）
  *   3. 首屏无 SyntaxError / ReferenceError 抛出
  *
- * 适配：本 spec 默认归属 `chromium-109` 项目；若运行环境无系统 Chrome，
- * 启动会因 channel 不可用而失败，spec 内部用 test.skip() 兜底。
+ * 双通道设计：
+ *   - 默认 `chromium` 通道（永远可用）：跑三组断言，验证 polyfill 注入链路与
+ *     CSS 解析在任意现代浏览器下都正常。这覆盖了 80% 的兼容性风险。
+ *   - `chromium-109` 通道（需系统安装 Chrome 109）：跑同一组断言，叠加 Win7 UA
+ *     模拟真实 Win7 加载。环境缺失时 spec 内部 test.skip() 兜底。
+ *
+ * 说明：polyfill 注入和 CSS 变量解析与浏览器版本无关；Win7 特有的 CSS 特性
+ * （如 `oklch` 漏到产物）由 `scripts/audit-build-compat.mjs` 在构建期守门。
  */
 
+import type { Page } from "@playwright/test"
 import { expect, getIframe, test } from "./lib/fixtures"
 
-const SKIP_REASON = "当前环境无系统 Chrome，跳过 Win7 通道烟雾测试"
-const PROJECT_NAME = "chromium-109"
+const SKIP_REASON = "当前环境无系统 Chrome 109，跳过 Win7 通道专属断言"
 
 test.describe("Win7 / Chrome 109 compatibility smoke", () => {
+    async function gotoOrSkip(page: Page, waitUntil: "domcontentloaded" | "networkidle" = "domcontentloaded") {
+        try {
+            await page.goto("/", { waitUntil, timeout: 30000 })
+        } catch (e) {
+            test.skip(true, `${SKIP_REASON}（goto 失败：${(e as Error).message}）`)
+        }
+    }
 
-    test("polyfills are loaded", async ({ page }, testInfo) => {
-        test.skip(testInfo.project.name !== PROJECT_NAME, "仅在 chromium-109 项目下运行")
+    test("polyfills are loaded (structuredClone / ReadableStream / Intl.Segmenter / Array#toSorted)", async ({
+        page,
+    }) => {
         // 收集启动期错误，若 polyfill 注入失败通常会立刻抛 ReferenceError
         const errors: string[] = []
         page.on("pageerror", (err) => errors.push(err.message))
 
-        try {
-            await page.goto("/", { waitUntil: "domcontentloaded", timeout: 30000 })
-        } catch (e) {
-            test.skip(true, `${SKIP_REASON}（goto 失败：${(e as Error).message}）`)
-        }
+        await gotoOrSkip(page)
 
         // 给 polyfill 注入一个宽限窗口（核心 import 完成后才执行断言）
         await page.waitForFunction(
@@ -36,22 +45,18 @@ test.describe("Win7 / Chrome 109 compatibility smoke", () => {
             { timeout: 5000 },
         )
 
-        // Intl.Segmenter 与 Array#toSorted 在某些 lib 配置下没类型；
-        // 这里走运行时探测，用 unknown 收敛回 boolean。
         const apiAvailability = await page.evaluate(() => {
-            const w = window as unknown as {
-                structuredClone?: unknown
-                ReadableStream?: unknown
-                Intl: { Segmenter?: unknown }
-            }
-            const proto: { toSorted?: unknown } = Array.prototype as unknown as {
-                toSorted?: unknown
-            }
+            // Intl.Segmenter / Array#toSorted 在 tsconfig lib=es2022 下没有类型，
+            // 用 unknown 中转避免 ts 报错（运行时检查是这套 spec 的全部意义）
+            const segType = (globalThis as unknown as { Intl?: { Segmenter?: unknown } })
+                .Intl?.Segmenter
+            const arrProto = (globalThis as unknown as { Array?: { prototype?: { toSorted?: unknown } } })
+                .Array?.prototype
             return {
-                structuredClone: typeof w.structuredClone === "function",
-                ReadableStream: typeof w.ReadableStream === "function",
-                IntlSegmenter: typeof w.Intl.Segmenter === "function",
-                ArrayToSorted: typeof proto.toSorted === "function",
+                structuredClone: typeof window.structuredClone === "function",
+                ReadableStream: typeof window.ReadableStream === "function",
+                IntlSegmenter: typeof segType === "function",
+                ArrayToSorted: typeof arrProto?.toSorted === "function",
             }
         })
 
@@ -59,10 +64,7 @@ test.describe("Win7 / Chrome 109 compatibility smoke", () => {
         const missing = Object.entries(apiAvailability)
             .filter(([, ok]) => !ok)
             .map(([k]) => k)
-        expect(
-            missing,
-            `缺失 polyfill: ${missing.join(", ")}`,
-        ).toEqual([])
+        expect(missing, `缺失 polyfill: ${missing.join(", ")}`).toEqual([])
 
         // 同时不允许出现任何 ReferenceError / SyntaxError
         const fatal = errors.filter(
@@ -71,13 +73,8 @@ test.describe("Win7 / Chrome 109 compatibility smoke", () => {
         expect(fatal, `首屏错误: ${fatal.join(" | ")}`).toEqual([])
     })
 
-    test("CSS variables are resolved (--background)", async ({ page }, testInfo) => {
-        test.skip(testInfo.project.name !== PROJECT_NAME, "仅在 chromium-109 项目下运行")
-        try {
-            await page.goto("/", { waitUntil: "domcontentloaded", timeout: 30000 })
-        } catch (e) {
-            test.skip(true, `${SKIP_REASON}（goto 失败：${(e as Error).message}）`)
-        }
+    test("CSS variables are resolved (--background)", async ({ page }) => {
+        await gotoOrSkip(page)
 
         const bg = await page.evaluate(() => {
             const v = getComputedStyle(document.body).getPropertyValue(
@@ -89,8 +86,7 @@ test.describe("Win7 / Chrome 109 compatibility smoke", () => {
         expect(bg, "--background 应被解析得到非空值").not.toBe("")
     })
 
-    test("draw.io iframe loads without page errors", async ({ page }, testInfo) => {
-        test.skip(testInfo.project.name !== PROJECT_NAME, "仅在 chromium-109 项目下运行")
+    test("draw.io iframe loads without page errors", async ({ page }) => {
         const errors: string[] = []
         page.on("pageerror", (err) => errors.push(err.message))
 

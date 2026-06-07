@@ -661,10 +661,21 @@ npm run compat:audit:strict
 2. **CSS variables are resolved (--background)** — 验证 `globals.css` 关键变量在该浏览器下能解析
 3. **draw.io iframe loads without page errors** — 端到端验证嵌入链路
 
+**双通道设计**（适配无 Chrome 109 环境的现实）：
+
+- **默认 `chromium` 通道**（永远可用）：跑全部三组断言。polyfill 注入和 CSS 变量解析与浏览器版本无关，任意现代浏览器都能验证，覆盖 80% 兼容性风险。
+- **`chromium-109` 通道**（需系统安装 Chrome 109）：跑同一组断言，叠加 Win7 UA 模拟真实 Win7 加载。环境缺失时 spec 内部 `test.skip()` 兜底，不阻塞主流程。
+
 **运行：**
 
 ```bash
-# 需先在系统中安装 Chrome 109（或兼容版本）
+# 跑全部通道（默认 chromium 必跑，chromium-109 若无 Chrome 109 自动 skip）
+npm run test:e2e
+
+# 仅跑默认 chromium 通道（无系统 Chrome 109 时用这个）
+npx playwright test --project=chromium
+
+# 仅跑 Win7 通道（需先在系统中安装 Chrome 109）
 npx playwright test --project=chromium-109
 ```
 

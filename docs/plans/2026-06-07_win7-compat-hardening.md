@@ -106,9 +106,10 @@
 - [x] 步骤 3：在 `package.json` 增加 `compat:audit` script
 - [x] 步骤 4：修改 `tsconfig.json` `lib: ["dom","dom.iterable","es2022"]`
 - [x] 步骤 5：修改 `playwright.config.ts` 增加 `chromium-109` 项目
-- [x] 步骤 6：新建 `tests/e2e/win7-compat.spec.ts`
+- [x] 步骤 6：新建 `tests/e2e/win7-compat.spec.ts`（**后续放宽到默认 chromium 通道也跑**，见 PR 补交说明）
 - [x] 步骤 7：运行 `npm run build && npm run compat:audit -- --strict` 确认当前产物干净（exit 0，0 命中）
-- [ ] 步骤 8：运行 `npm run test:e2e -- --project=chromium-109`（需在有 Chrome 109 的环境执行）
+- [x] 步骤 8：默认 chromium 通道跑三组断言（`npx playwright test --project=chromium`）；Win7 通道（`chromium-109`）因环境无 Chrome 109 整体 skip
+- [ ] 步骤 8b：未来在有 Chrome 109 的环境跑 `npx playwright test --project=chromium-109`
 - [x] 步骤 9：技术手册已更新（在 `docs/technical/zh/technical-manual.md` 第 12 节追加加固条目）
 - [x] 步骤 10：旧计划由本方案覆盖（见 `2026-05-20-win7-browser-compatibility.md` 阶段四的"加固补充"小节）
 - [ ] 步骤 11：commit + 推送，开 PR（执行中）
