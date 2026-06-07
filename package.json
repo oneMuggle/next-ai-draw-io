@@ -11,6 +11,8 @@
         "lint": "biome lint .",
         "format": "biome check --write .",
         "check": "biome ci",
+        "compat:audit": "node scripts/audit-build-compat.mjs",
+        "compat:audit:strict": "node scripts/audit-build-compat.mjs --strict",
         "prepare": "husky",
         "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
         "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

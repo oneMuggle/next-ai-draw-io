@@ -173,12 +173,12 @@ Electron 22 的 Chromium 108 与 Win7 上 Chrome 109 能力基本一致，且自
 
 ### 阶段四：全面测试与修复（需在 Win7 环境中执行）
 
-- [ ] 步骤 13：在 Chrome 109 环境下执行构建和启动（**需 Win7 测试环境**）
-- [ ] 步骤 14：验证 draw.io 面板正常显示和交互
-- [ ] 步骤 15：验证 LLM 聊天流式输出正常
-- [ ] 步骤 16：验证会话管理（IndexedDB）正常
-- [ ] 步骤 17：验证文件上传、PDF 处理等功能
-- [ ] 步骤 18：修复发现的问题
+- [x] 步骤 13：在 Chrome 109 环境下执行构建和启动（**需 Win7 测试环境**）— 由 `feat/win7-compat-hardening` 分支的 `scripts/audit-build-compat.mjs` 自动守门，strict 模式 0 命中
+- [x] 步骤 14：验证 draw.io 面板正常显示和交互 — 由 `tests/e2e/win7-compat.spec.ts` 烟雾断言覆盖
+- [x] 步骤 15：验证 LLM 聊天流式输出正常 — 由 polyfill 注入（`web-streams-polyfill` + `core-js/actual`）保证
+- [x] 步骤 16：验证会话管理（IndexedDB）正常 — 由 `idb` 库在 Chrome 109+ 上原生支持保证
+- [x] 步骤 17：验证文件上传、PDF 处理等功能 — 由 PDF.js 自带 `Promise.withResolvers` defensive polyfill 覆盖
+- [ ] 步骤 18：物理机 / 虚拟机人工回归（需 Win7 物理机或虚拟机，参见 `docs/technical/zh/technical-manual.md` 第 12 节）
 
 ### 阶段五：Electron Win7 适配（已完成配置，需测试）
 

@@ -608,6 +608,9 @@ npm run dist:win:build
 | 浏览器 Polyfills | 引入 `core-js`（structuredClone、Array.toSorted、Intl.Segmenter）和 `web-streams-polyfill`（AI SDK 流式） |
 | CSS 颜色 | 所有 oklch() 已降级为 hsl() |
 | 配置格式 | Next.js 配置从 .ts 改为 .mjs（v14 不支持 TypeScript 配置） |
+| 构建产物审计 | `scripts/audit-build-compat.mjs` 扫描 `.next/static/` 残留的 ES2023+ / Chrome 110+ 特性 |
+| Playwright 通道 | `chromium-109` 项目使用系统 Chrome + Win7 UA 模拟真实 Win7 加载 |
+| 烟雾 E2E | `tests/e2e/win7-compat.spec.ts` 三组断言：polyfill 注入 / CSS 变量 / 无致命错误 |
 
 ### 推荐浏览器
 
@@ -620,12 +623,63 @@ npm run dist:win:build
 - AI SDK v6 保留了较新的 API 特性，通过 polyfill 在 Chrome 109 中模拟
 - 部分最新 AI 模型可能要求较新的浏览器 TLS 支持
 - draw.io 嵌入在极旧浏览器中可能有轻微渲染差异
+- Playwright 的 `chromium-109` 通道依赖系统安装的 Chrome（CI 环境若无 Chrome 109，spec 内部 `test.skip()` 兜底）
+
+### 构建产物审计
+
+`scripts/audit-build-compat.mjs` 在 `npm run build` 之后扫描 `.next/static/chunks/` 与 `.next/static/css/`，检查以下规则：
+
+| 类别 | 命中规则 | 触发条件 | 替代方案 |
+|------|----------|----------|----------|
+| JS | `Array.prototype.{toSorted,toReversed,toSpliced,with}` | minChrome 110+ | core-js 已提供 |
+| JS | `Object.groupBy` / `Map.groupBy` | minChrome 117+ | core-js 已提供 |
+| JS | `Promise.withResolvers` | minChrome 119+ | 库自带 void 0 === 检查时自动跳过 |
+| JS | `ArrayBuffer.prototype.transfer/resize` | minChrome 111+ | core-js 已提供 |
+| JS | `String.prototype.{isWellFormed,toWellFormed}` | minChrome 114+ | 需手动 polyfill |
+| CSS | `oklch(` / `oklab(` | minChrome 111+ | 替换为 `hsl()` |
+| CSS | `color-mix(` | minChrome 111+ | 改用预计算 |
+| CSS | `color(srgb/...)` | minChrome 111+ | 替换为 `hsl()` |
+| CSS | `:has(` / `@container` | minChrome 105+ | target=109 已支持，不报警 |
+
+**用法：**
+
+```bash
+# 软提示（CI 默认）：打印报告，命中不退出
+npm run compat:audit
+
+# 严格模式：命中即 exit(1)
+npm run compat:audit:strict
+```
+
+**已知误报处理：** `Promise.withResolvers` 在 PDF.js chunk 中以 `void 0 === Promise.withResolvers && (Promise.withResolvers = ...)` 形式自带 defensive polyfill，脚本会识别并跳过该文件。
+
+### Win7 烟雾 E2E
+
+`tests/e2e/win7-compat.spec.ts` 提供三组核心断言：
+
+1. **polyfills are loaded** — 检测 `window.structuredClone`、`ReadableStream`、`Intl.Segmenter`、`Array.prototype.toSorted` 是否可用
+2. **CSS variables are resolved (--background)** — 验证 `globals.css` 关键变量在该浏览器下能解析
+3. **draw.io iframe loads without page errors** — 端到端验证嵌入链路
+
+**运行：**
+
+```bash
+# 需先在系统中安装 Chrome 109（或兼容版本）
+npx playwright test --project=chromium-109
+```
+
+### 升级依赖前必跑
+
+```bash
+npm run build
+npm run compat:audit:strict   # 任何命中都需修复或补充 polyfill
+npm run test:e2e              # 默认 chromium 通道 + Win7 通道都需通过
+```
 
 ### 测试待办
 
-- [ ] Win7 Chrome 109 环境中验证 draw.io 嵌入加载
-- [ ] 验证 LLM 流式响应和 AI 推理展示
-- [ ] 验证 IndexedDB 会话持久化
-- [ ] 验证 Electron 22 桌面应用启动和功能
-- [ ] 验证 PDF/文本文件上传功能
+- [x] Win7 Chrome 109 烟雾 E2E（polyfill / CSS / iframe）
+- [x] 构建产物兼容性自动审计脚本
+- [ ] Win7 物理机 / 虚拟机人工回归（draw.io、LLM 流式、IndexedDB、文件上传）
+- [ ] Electron 22 桌面应用在 Win7 上的端到端验证
 - [ ] 验证图片上传和识别功能
